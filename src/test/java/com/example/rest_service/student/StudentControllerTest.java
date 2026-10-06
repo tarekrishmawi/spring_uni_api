@@ -4,8 +4,13 @@ import com.example.rest_service.auth.JwtAuthenticationFilter;
 
 import tools.jackson.databind.ObjectMapper;
 
-import org.junit.jupiter.api.Test;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.HttpStatus;
@@ -39,6 +44,17 @@ class StudentControllerTest {
 
         @MockitoBean
         private JwtAuthenticationFilter jwtAuthenticationFilter;
+
+        @BeforeEach
+        void setUp() throws Exception {
+                Mockito.doAnswer(invocation -> {
+                        HttpServletRequest request = invocation.getArgument(0);
+                        HttpServletResponse response = invocation.getArgument(1);
+                        FilterChain filterChain = invocation.getArgument(2);
+                        filterChain.doFilter(request, response);
+                        return null;
+                }).when(jwtAuthenticationFilter).doFilter(any(), any(), any());
+        }
 
         @Test
         void createStudentReturns201() throws Exception {
