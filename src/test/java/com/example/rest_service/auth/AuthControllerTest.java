@@ -59,6 +59,7 @@ class AuthControllerTest {
 
         LoginResponse response = new LoginResponse(
                 "test-access-token",
+                "test-refresh-token",
                 "Bearer",
                 900000L,
                 "admin",
@@ -80,6 +81,10 @@ class AuthControllerTest {
         .andExpect(
                 jsonPath("$.accessToken")
                         .value("test-access-token")
+        )
+        .andExpect(
+        jsonPath("$.refreshToken")
+        .value("test-refresh-token")
         )
         .andExpect(
                 jsonPath("$.tokenType")

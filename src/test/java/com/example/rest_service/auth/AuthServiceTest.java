@@ -1,3 +1,4 @@
+
 package com.example.rest_service.auth;
 
 import com.example.rest_service.auth.dto.LoginRequest;
@@ -35,6 +36,10 @@ class AuthServiceTest {
     @Mock
     private JwtProperties jwtProperties;
 
+    // New dependency added for refresh-token support.
+    @Mock
+    private RefreshTokenService refreshTokenService;
+
     @InjectMocks
     private AuthService authService;
 
@@ -42,7 +47,6 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-
         admin = new User();
 
         admin.setUsername("admin");
@@ -55,78 +59,96 @@ class AuthServiceTest {
     @Test
     void loginReturnsAccessTokenForValidCredentials() {
 
-        LoginRequest request =
-            new LoginRequest(
+        LoginRequest request = new LoginRequest(
                 "admin",
                 "Admin123!"
-            );
+        );
 
         when(userRepository.findByUsername("admin"))
-            .thenReturn(Optional.of(admin));
+                .thenReturn(Optional.of(admin));
 
         when(jwtService.generateAccessToken(admin))
-            .thenReturn("test-access-token");
+                .thenReturn("test-access-token");
 
         when(jwtProperties.getAccessTokenExpiration())
-            .thenReturn(900000L);
+                .thenReturn(900000L);
 
-        LoginResponse response =
-            authService.login(request);
+        // Arrange a refresh token returned by the mocked service.
+        RefreshToken refreshToken = new RefreshToken();
+        refreshToken.setToken("test-refresh-token");
+        refreshToken.setUser(admin);
 
+        when(refreshTokenService.create(admin))
+                .thenReturn(refreshToken);
+
+        // Execute
+        LoginResponse response = authService.login(request);
+
+        // Verify response
         assertNotNull(response);
 
         assertEquals(
-            "test-access-token",
-            response.accessToken()
+                "test-access-token",
+                response.accessToken()
         );
 
         assertEquals(
-            "Bearer",
-            response.tokenType()
+                "test-refresh-token",
+                response.refreshToken()
         );
 
         assertEquals(
-            900000L,
-            response.expiresIn()
+                "Bearer",
+                response.tokenType()
         );
 
         assertEquals(
-            "admin",
-            response.username()
+                900000L,
+                response.expiresIn()
         );
 
         assertEquals(
-            "ADMIN",
-            response.role()
+                "admin",
+                response.username()
         );
 
+        assertEquals(
+                "ADMIN",
+                response.role()
+        );
+
+        // Verify interactions
         verify(authenticationManager).authenticate(
-            any(UsernamePasswordAuthenticationToken.class)
+                any(UsernamePasswordAuthenticationToken.class)
         );
 
         verify(userRepository).findByUsername("admin");
 
         verify(jwtService).generateAccessToken(admin);
+
+        verify(refreshTokenService).create(admin);
     }
 
     @Test
     void loginFailsWhenUserDoesNotExist() {
 
-        LoginRequest request =
-            new LoginRequest(
+        LoginRequest request = new LoginRequest(
                 "unknown",
                 "WrongPassword"
-            );
+        );
 
         when(userRepository.findByUsername("unknown"))
-            .thenReturn(Optional.empty());
+                .thenReturn(Optional.empty());
 
         assertThrows(
-            RuntimeException.class,
-            () -> authService.login(request)
+                IllegalStateException.class,
+                () -> authService.login(request)
         );
 
         verify(jwtService, never())
-            .generateAccessToken(any());
+                .generateAccessToken(any());
+
+        verify(refreshTokenService, never())
+                .create(any());
     }
 }

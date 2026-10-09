@@ -1,10 +1,10 @@
 package com.example.rest_service.auth.dto;
 
-public record LoginResponse(
+public record RefreshTokenResponse(
     String accessToken,
-    String refreshToken,
     String tokenType,
     long expiresIn,
     String username,
     String role
-) {}
+) {
+}
