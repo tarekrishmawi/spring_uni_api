@@ -1,13 +1,13 @@
+
 package com.example.rest_service.auth;
 
 import com.example.rest_service.auth.dto.LoginRequest;
-import com.example.rest_service.auth.dto.LoginResponse;
-import com.example.rest_service.auth.dto.RefreshTokenResponse;
-
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class AuthService {
@@ -24,84 +24,104 @@ public class AuthService {
             JwtService jwtService,
             JwtProperties jwtProperties,
             RefreshTokenService refreshTokenService) {
-
-        this.authenticationManager =
-            authenticationManager;
-
-        this.userRepository =
-            userRepository;
-
-        this.jwtService =
-            jwtService;
-
-        this.jwtProperties =
-            jwtProperties;
-
-        this.refreshTokenService =
-            refreshTokenService;
+        this.authenticationManager = authenticationManager;
+        this.userRepository = userRepository;
+        this.jwtService = jwtService;
+        this.jwtProperties = jwtProperties;
+        this.refreshTokenService = refreshTokenService;
     }
 
-    public LoginResponse login(LoginRequest request) {
+    /**
+     * Authenticates the user and creates a new session.
+     *
+     * The refresh token is returned internally to AuthController,
+     * which sends it to the browser as an HttpOnly cookie.
+     */
+    @Transactional
+    public LoginResult login(LoginRequest request) {
 
         authenticationManager.authenticate(
-            new UsernamePasswordAuthenticationToken(
-                request.username(),
-                request.password()
-            )
-        );
+                new UsernamePasswordAuthenticationToken(
+                        request.username(),
+                        request.password()));
 
-        User user =
-            userRepository
-                .findByUsername(request.username())
-                .orElseThrow(() ->
-                    new IllegalStateException(
-                        "Authenticated user no longer exists"
-                    )
-                );
+        User user = userRepository.findByUsername(request.username())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED,
+                        "Invalid username or password"));
 
-        String accessToken =
-            jwtService.generateAccessToken(user);
+        if (!user.isEnabled()) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "User account is disabled");
+        }
 
-        RefreshToken refreshToken =
-            refreshTokenService.create(user);
+        String accessToken = jwtService.generateAccessToken(user);
 
-        return new LoginResponse(
-            accessToken,
-            refreshToken.getToken(),
-            "Bearer",
-            jwtProperties.getAccessTokenExpiration(),
-            user.getUsername(),
-            user.getRole().name()
-        );
+        RefreshToken refreshToken = refreshTokenService.create(user);
+
+        return new LoginResult(
+                accessToken,
+                refreshToken.getToken(),
+                "Bearer",
+                jwtProperties.getAccessTokenExpiration(),
+                user.getUsername(),
+                user.getRole().name());
     }
 
-    public RefreshTokenResponse refresh(
-            String refreshTokenValue) {
+    /**
+     * Validates and rotates the refresh token.
+     *
+     * The controller returns the new refresh token in an
+     * HttpOnly cookie, never in the JSON response.
+     */
+    @Transactional
+    public RefreshResult refresh(String refreshTokenValue) {
 
-        RefreshToken refreshToken =
-            refreshTokenService.validate(
-                refreshTokenValue
-            );
+        if (refreshTokenValue == null || refreshTokenValue.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Refresh token is missing");
+        }
 
-        User user =
-            refreshToken.getUser();
+        RefreshToken currentToken = refreshTokenService.validate(refreshTokenValue);
 
-        String accessToken =
-            jwtService.generateAccessToken(user);
+        User user = currentToken.getUser();
 
-        return new RefreshTokenResponse(
-            accessToken,
-            "Bearer",
-            jwtProperties.getAccessTokenExpiration(),
-            user.getUsername(),
-            user.getRole().name()
-        );
+        if (!user.isEnabled()) {
+            refreshTokenService.revoke(refreshTokenValue);
+
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "User account is disabled");
+        }
+
+        String accessToken = jwtService.generateAccessToken(user);
+
+        // Creates a replacement token. The current RefreshTokenService
+        // deletes existing refresh tokens for this user before saving
+        // the replacement.
+        RefreshToken replacementToken = refreshTokenService.create(user);
+
+        return new RefreshResult(
+                accessToken,
+                replacementToken.getToken(),
+                "Bearer",
+                jwtProperties.getAccessTokenExpiration(),
+                user.getUsername(),
+                user.getRole().name());
     }
 
-    public void logout(String refreshToken) {
+    /**
+     * Revokes the refresh token associated with the browser session.
+     */
+    @Transactional
+    public void logout(String refreshTokenValue) {
 
-        refreshTokenService.revoke(
-            refreshToken
-        );
+        if (refreshTokenValue == null || refreshTokenValue.isBlank()) {
+            return;
+        }
+
+        refreshTokenService.revoke(refreshTokenValue);
     }
 }
