@@ -26,6 +26,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -81,7 +82,8 @@ class StudentControllerTest {
                                 "Khalil",
                                 "ahmad@example.com",
                                 null,
-                                "0599000000");
+                                "0599000000",
+                                null);
 
                 // Act & Assert
                 mockMvc.perform(
@@ -116,7 +118,8 @@ class StudentControllerTest {
                                 "Khalil",
                                 "not-an-email",
                                 null,
-                                "0599000000");
+                                "0599000000",
+                                null);
 
                 // Act & Assert
                 mockMvc.perform(
@@ -164,7 +167,8 @@ class StudentControllerTest {
                                 "Khalil",
                                 "new@example.com",
                                 null,
-                                "0599000000");
+                                "0599000000",
+                                null);
 
                 when(service.create(any(StudentRequest.class)))
                                 .thenThrow(
@@ -184,6 +188,45 @@ class StudentControllerTest {
                                                 jsonPath("$.message")
                                                                 .value(
                                                                                 "Student number already exists"));
+        }
+
+        @Test
+        void updateStudentAcceptsStatusInRequest() throws Exception {
+
+                String request = """
+                                {
+                                  "studentNumber": "20260001",
+                                  "firstName": "Ahmad",
+                                  "lastName": "Khalil",
+                                  "email": "ahmad@example.com",
+                                  "phone": "0599000000",
+                                  "status": "INACTIVE"
+                                }
+                                """;
+
+                when(service.update(any(Long.class), any(StudentRequest.class)))
+                                .thenAnswer(invocation -> {
+                                        StudentRequest updateRequest = invocation.getArgument(1);
+                                        return new StudentResponse(
+                                                        1L,
+                                                        updateRequest.studentNumber(),
+                                                        updateRequest.firstName(),
+                                                        updateRequest.lastName(),
+                                                        updateRequest.email(),
+                                                        updateRequest.dateOfBirth(),
+                                                        updateRequest.phone(),
+                                                        updateRequest.status(),
+                                                        null,
+                                                        null);
+                                });
+
+                mockMvc.perform(
+                                put("/api/students/1")
+                                                .with(user("admin").roles("ADMIN"))
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(request))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.status").value("INACTIVE"));
         }
 
         @Test

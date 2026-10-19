@@ -44,7 +44,8 @@ class StudentServiceTest {
             "Khalil",
             "AHMAD@example.com",
             null,
-            "0599000000"
+            "0599000000",
+            null
         );
     }
 
@@ -139,6 +140,40 @@ class StudentServiceTest {
             404,
             exception.getStatusCode().value()
         );
+    }
+
+    @Test
+    void updateStudentStatus() {
+
+        Student student = new Student();
+        student.setStudentNumber("20260001");
+        student.setFirstName("Ahmad");
+        student.setLastName("Khalil");
+        student.setEmail("ahmad@example.com");
+        student.setStatus("ACTIVE");
+
+        StudentRequest updateRequest = new StudentRequest(
+            "20260001",
+            "Ahmad",
+            "Khalil",
+            "ahmad@example.com",
+            null,
+            "0599000000",
+            "INACTIVE"
+        );
+
+        when(repository.findById(1L)).thenReturn(Optional.of(student));
+        when(repository.existsByStudentNumberAndIdNot("20260001", 1L))
+            .thenReturn(false);
+        when(repository.existsByEmailAndIdNot("ahmad@example.com", 1L))
+            .thenReturn(false);
+        when(repository.save(any(Student.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        StudentResponse result = service.update(1L, updateRequest);
+
+        assertEquals("INACTIVE", result.status());
+        verify(repository).save(student);
     }
 
     @Test

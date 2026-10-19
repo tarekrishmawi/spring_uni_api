@@ -188,6 +188,10 @@ public class StudentService {
                 request.phone() == null
                         ? null
                         : request.phone().trim());
+
+        if (request.status() != null) {
+            student.setStatus(request.status().trim());
+        }
     }
 
     private String normalizeEmail(String email) {

@@ -26,5 +26,8 @@ public record StudentRequest(
     LocalDate dateOfBirth,
 
     @Size(max = 30)
-    String phone
+    String phone,
+
+    @Size(max = 30)
+    String status
 ) {}
